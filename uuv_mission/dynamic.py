@@ -110,7 +110,18 @@ class ClosedLoop:
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
             # Call your controller here
+            error_t = mission.reference[t] - observation_t
+            if t == 0:
+                error_prev = error_t  # For the first step, previous error is the current error
+            
+            # Control action: u[t] = KP * e[t] + KD * (e[t] - e[t-1])
+            action_t = self.controller(error_t, error_t - error_prev)
+            error_prev = error_t  # Update the previous error
+
+            # Store the control action and update the submarine state
+            actions[t] = action_t
             self.plant.transition(actions[t], disturbances[t])
+
 
         return Trajectory(positions)
         
