@@ -3,7 +3,8 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from .terrain import generate_reference_and_limits
+from terrain import generate_reference_and_limits
+from control import PDController
 
 class Submarine:
     def __init__(self):
@@ -77,17 +78,11 @@ class Mission:
     @classmethod
     def from_csv(cls, file_name: str):
         
-        # Load data from CSV into a pandas DataFrame
-        df = pd.read_csv(file_name)
-        
-
-        reference = df['reference'].values
-        cave_height = df['cave_height'].values
-        cave_depth = df['cave_depth'].values
-        
-        # Return a new instance of Mission
+        data = pd.read_csv(file_name)
+        reference = data['reference'].to_numpy()
+        cave_height = data['cave_height'].to_numpy()
+        cave_depth = data['cave_depth'].to_numpy()
         return cls(reference, cave_height, cave_depth)
-
         #pass
 
 
@@ -96,8 +91,7 @@ class ClosedLoop:
         self.plant = plant
         self.controller = controller
 
-    def simulate(self,  mission: Mission, disturbances: np.ndarray) -> Trajectory:
-
+    def simulate(self, mission: Mission, disturbances: np.ndarray) -> Trajectory:
         T = len(mission.reference)
         if len(disturbances) < T:
             raise ValueError("Disturbances must be at least as long as mission duration")
@@ -109,19 +103,10 @@ class ClosedLoop:
         for t in range(T):
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
-            # Call your controller here
-            error_t = mission.reference[t] - observation_t
-            if t == 0:
-                error_prev = error_t  # For the first step, previous error is the current error
-            
-            # Control action: u[t] = KP * e[t] + KD * (e[t] - e[t-1])
-            action_t = self.controller(error_t, error_t - error_prev)
-            error_prev = error_t  # Update the previous error
-
-            # Store the control action and update the submarine state
-            actions[t] = action_t
+            #Calling the controller to get the control action
+            reference_t = mission.reference[t]
+            actions[t] = self.controller.compute_control(reference_t, observation_t)
             self.plant.transition(actions[t], disturbances[t])
-
 
         return Trajectory(positions)
         
